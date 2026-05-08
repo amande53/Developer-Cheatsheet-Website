@@ -7,45 +7,59 @@ const biasSelect = document.getElementById("bias-select");
 const biasButton = document.getElementById("bias-mode");
 const musicButton = document.getElementById("music-mode");
 const eraButton = document.getElementById("era-mode");
+const canvas = document.getElementById("particles");
+const ctx = canvas?.getContext("2d");
 
 const html = document.documentElement;
 const body = document.body;
 
 /* =========================
-   🎨 THEME + BIAS SETUP
+   💾 SAVED SETTINGS
 ========================= */
 
-const savedTheme = localStorage.getItem("theme") || "bts";
-const savedBias = localStorage.getItem("bias") || "jhope";
+const DEFAULT_THEME = "bts";
+const DEFAULT_BIAS = "jhope";
 
-let currentTheme = savedTheme;
+let currentTheme = localStorage.getItem("theme") || DEFAULT_THEME;
+let currentBias = localStorage.getItem("bias") || DEFAULT_BIAS;
 
-html.setAttribute("data-theme", savedTheme);
-body.dataset.bias = savedBias;
+html.setAttribute("data-theme", currentTheme);
+body.dataset.bias = currentBias;
 
-if (themeSelect) themeSelect.value = savedTheme;
-if (biasSelect) biasSelect.value = savedBias;
+if (themeSelect) themeSelect.value = currentTheme;
+if (biasSelect) biasSelect.value = currentBias;
 
 /* =========================
-   🎛 CONTROLS
+   🎛 THEME CONTROLS
 ========================= */
+
+function setTheme(theme, saveTheme = true) {
+  if (!theme || theme === currentTheme) return;
+
+  currentTheme = theme;
+  html.setAttribute("data-theme", theme);
+
+  if (themeSelect) themeSelect.value = theme;
+  if (saveTheme) localStorage.setItem("theme", theme);
+
+  createParticles();
+}
 
 if (themeSelect) {
   themeSelect.addEventListener("change", () => {
-    const selectedTheme = themeSelect.value;
-    if (selectedTheme === currentTheme) return;
-
-    currentTheme = selectedTheme;
-    html.setAttribute("data-theme", selectedTheme);
-    localStorage.setItem("theme", selectedTheme);
-
-    createParticles();
+    stopEraMode();
+    setTheme(themeSelect.value);
   });
 }
+
+/* =========================
+   💜 BIAS MODE
+========================= */
 
 if (biasButton) {
   biasButton.addEventListener("click", () => {
     body.classList.toggle("bias-mode");
+
     biasButton.textContent = body.classList.contains("bias-mode")
       ? "💜 Bias ON"
       : "💜 Bias";
@@ -54,77 +68,106 @@ if (biasButton) {
 
 if (biasSelect) {
   biasSelect.addEventListener("change", () => {
-    body.dataset.bias = biasSelect.value;
-    localStorage.setItem("bias", biasSelect.value);
+    currentBias = biasSelect.value;
+    body.dataset.bias = currentBias;
+    localStorage.setItem("bias", currentBias);
   });
 }
+
+/* =========================
+   🎧 MUSIC MODE
+========================= */
 
 if (musicButton) {
   musicButton.addEventListener("click", () => {
     body.classList.toggle("music-mode");
+
+    musicButton.textContent = body.classList.contains("music-mode")
+      ? "🎧 Music ON"
+      : "🎧 Music";
   });
 }
 
 /* =========================
-   🎬 ERA MODE
+   🎬 BTS ERA MODE
 ========================= */
 
+const eraThemes = [
+  "arirang",
+  "dark-wild",
+  "hyyh",
+  "wings",
+  "love-yourself",
+  "mots",
+  "be",
+  "proof",
+];
+
 let eraModeActive = false;
+let currentEraIndex = 0;
+let eraInterval = null;
+
+function activateEraTheme() {
+  const eraTheme = eraThemes[currentEraIndex];
+
+  setTheme(eraTheme, false);
+  currentEraIndex = (currentEraIndex + 1) % eraThemes.length;
+}
+
+function startEraMode() {
+  if (eraModeActive) return;
+
+  eraModeActive = true;
+  body.classList.add("era-mode");
+  eraButton.textContent = "🎬 Era ON";
+
+  currentEraIndex = eraThemes.indexOf(currentTheme);
+  if (currentEraIndex === -1) currentEraIndex = 0;
+
+  activateEraTheme();
+  eraInterval = setInterval(activateEraTheme, 5000);
+}
+
+function stopEraMode() {
+  if (!eraModeActive) return;
+
+  eraModeActive = false;
+  clearInterval(eraInterval);
+  eraInterval = null;
+
+  body.classList.remove("era-mode");
+  if (eraButton) eraButton.textContent = "🎬 Era";
+
+  const savedTheme = localStorage.getItem("theme") || DEFAULT_THEME;
+  setTheme(savedTheme, false);
+}
 
 if (eraButton) {
   eraButton.addEventListener("click", () => {
-    eraModeActive = !eraModeActive;
-
-    body.classList.toggle("era-mode");
-    eraButton.textContent = eraModeActive ? "🎬 Era ON" : "🎬 Era";
-
-    if (!eraModeActive) {
-      currentTheme = savedTheme;
-      html.setAttribute("data-theme", savedTheme);
-    }
+    eraModeActive ? stopEraMode() : startEraMode();
   });
 }
 
-const eraSections = document.querySelectorAll(".era-section");
-
-const eraObserver = new IntersectionObserver(
-  (entries) => {
-    if (!eraModeActive) return;
-
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-
-      const eraTheme = entry.target.dataset.era;
-      if (!eraTheme || eraTheme === currentTheme) return;
-
-      currentTheme = eraTheme;
-      html.setAttribute("data-theme", eraTheme);
-
-      if (themeSelect) themeSelect.value = eraTheme;
-
-      createParticles();
-    });
-  },
-  { threshold: 0.45 }
-);
-
-eraSections.forEach((section) => eraObserver.observe(section));
-
 /* =========================
-   ✨ PARTICLES
+   ✨ PARTICLE STATE
 ========================= */
-
-const canvas = document.getElementById("particles");
-const ctx = canvas?.getContext("2d");
 
 let particles = [];
 let sparkles = [];
 
-const mouse = { x: null, y: null, radius: 180 };
+const mouse = {
+  x: null,
+  y: null,
+  radius: 180,
+};
 
-window.addEventListener("mousemove", (e) => {
-  mouse.x = e.clientX;
-  mouse.y = e.clientY;
+/* =========================
+   🖱 MOUSE EVENTS
+========================= */
+
+window.addEventListener("mousemove", (event) => {
+  mouse.x = event.clientX;
+  mouse.y = event.clientY;
 });
 
 window.addEventListener("mouseleave", () => {
@@ -132,21 +175,34 @@ window.addEventListener("mouseleave", () => {
   mouse.y = null;
 });
 
-window.addEventListener("click", (e) => {
-  createSparkleBurst(e.clientX, e.clientY);
+window.addEventListener("click", (event) => {
+  createSparkleBurst(event.clientX, event.clientY);
 });
+
+/* =========================
+   🖼 CANVAS SETUP
+========================= */
 
 function resizeCanvas() {
   if (!canvas) return;
+
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 }
 
 resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", () => {
+  resizeCanvas();
+  createParticles();
+});
+
+/* =========================
+   🎨 THEME COLORS
+========================= */
 
 function getThemeColors() {
   const styles = getComputedStyle(html);
+
   return {
     pink: styles.getPropertyValue("--pink").trim() || "#ff4fd8",
     purple: styles.getPropertyValue("--purple").trim() || "#6a0dad",
@@ -154,7 +210,17 @@ function getThemeColors() {
   };
 }
 
+function getCurrentTheme() {
+  return html.getAttribute("data-theme");
+}
+
+/* =========================
+   ✨ PARTICLES
+========================= */
+
 function createParticles() {
+  if (!canvas) return;
+
   particles = [];
 
   for (let i = 0; i < 40; i++) {
@@ -183,67 +249,82 @@ function createSparkleBurst(x, y) {
   }
 }
 
-function reactToMouse(p) {
-  if (mouse.x === null) return;
+function reactToMouse(particle) {
+  if (mouse.x === null || mouse.y === null) return;
 
-  const dx = p.x - mouse.x;
-  const dy = p.y - mouse.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dx = particle.x - mouse.x;
+  const dy = particle.y - mouse.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
 
-  if (dist < mouse.radius) {
-    const angle = Math.atan2(dy, dx);
-    const force = (mouse.radius - dist) / mouse.radius;
+  if (distance >= mouse.radius) return;
 
-    p.x += Math.cos(angle) * force * 6;
-    p.y += Math.sin(angle) * force * 6;
-  }
+  const angle = Math.atan2(dy, dx);
+  const force = (mouse.radius - distance) / mouse.radius;
+
+  particle.x += Math.cos(angle) * force * 6;
+  particle.y += Math.sin(angle) * force * 6;
 }
 
 /* =========================
-   ✨ POLISHED SPARKLES
+   ✨ SPARKLES
 ========================= */
 
-function drawSparkle(s, color) {
-  ctx.save();
+function getSparkleStyle() {
+  const theme = getCurrentTheme();
 
-  const theme = html.getAttribute("data-theme");
-
-  let size = s.size;
-  let lineWidth = 1.8;
-  let glow = 18;
-  let alpha = s.life;
+  const styles = {
+    size: 1,
+    lineWidth: 1.8,
+    glow: 18,
+    alpha: 1,
+    lifeLoss: 0.025,
+  };
 
   if (theme === "golden") {
-    size *= 1.5;
-    lineWidth = 2.4;
-    glow = 28;
-    alpha *= 0.9;
-  } else if (theme === "jack-box" || theme === "jack-hope") {
-    size *= 1.1;
-    lineWidth = 2.6;
-    glow = 16;
-    alpha *= 1.1;
-  } else if (theme === "mots" || theme === "mots7") {
-    size *= 1.4;
-    lineWidth = 2;
-    glow = 24;
-    alpha *= 0.85;
+    styles.size = 1.5;
+    styles.lineWidth = 2.4;
+    styles.glow = 28;
+    styles.alpha = 0.9;
+    styles.lifeLoss = 0.018;
   }
 
-  const pop = 1 + (1 - s.life) * 0.6;
-  size *= pop;
+  if (theme === "jack-box" || theme === "jack-hope") {
+    styles.size = 1.1;
+    styles.lineWidth = 2.6;
+    styles.glow = 16;
+    styles.alpha = 1.1;
+    styles.lifeLoss = 0.035;
+  }
 
-  ctx.globalAlpha = alpha;
+  if (theme === "mots") {
+    styles.size = 1.4;
+    styles.lineWidth = 2;
+    styles.glow = 24;
+    styles.alpha = 0.85;
+    styles.lifeLoss = 0.02;
+  }
+
+  return styles;
+}
+
+function drawSparkle(sparkle, color) {
+  const style = getSparkleStyle();
+  const pop = 1 + (1 - sparkle.life) * 0.6;
+  const size = sparkle.size * style.size * pop;
+
+  ctx.save();
+
+  ctx.globalAlpha = sparkle.life * style.alpha;
   ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-  ctx.shadowBlur = glow;
+  ctx.lineWidth = style.lineWidth;
+  ctx.shadowBlur = style.glow;
   ctx.shadowColor = color;
 
   ctx.beginPath();
-  ctx.moveTo(s.x - size, s.y);
-  ctx.lineTo(s.x + size, s.y);
-  ctx.moveTo(s.x, s.y - size);
-  ctx.lineTo(s.x, s.y + size);
+  ctx.moveTo(sparkle.x - size, sparkle.y);
+  ctx.lineTo(sparkle.x + size, sparkle.y);
+  ctx.moveTo(sparkle.x, sparkle.y - size);
+  ctx.lineTo(sparkle.x, sparkle.y + size);
   ctx.stroke();
 
   ctx.restore();
@@ -283,53 +364,64 @@ function drawBtsLogo(x, y, size, color, rotation) {
 }
 
 /* =========================
-   🎬 DRAW LOOP
+   🎬 ANIMATION LOOP
 ========================= */
+
+function updateSparkles(colors) {
+  const sparkleStyle = getSparkleStyle();
+
+  sparkles.forEach((sparkle, index) => {
+    sparkle.life -= sparkleStyle.lifeLoss;
+    sparkle.x += sparkle.speedX;
+    sparkle.y += sparkle.speedY;
+
+    const color =
+      index % 3 === 0
+        ? colors.pink
+        : index % 3 === 1
+          ? colors.purple
+          : colors.mint;
+
+    drawSparkle(sparkle, color);
+  });
+
+  sparkles = sparkles.filter((sparkle) => sparkle.life > 0);
+}
+
+function updateParticles(colors) {
+  const speed = body.classList.contains("music-mode") ? 2 : 1;
+
+  particles.forEach((particle, index) => {
+    particle.x += particle.speedX * speed;
+    particle.y += particle.speedY * speed;
+    particle.rotation += particle.spin * speed;
+
+    reactToMouse(particle);
+
+    if (particle.x < -80) particle.x = canvas.width + 80;
+    if (particle.x > canvas.width + 80) particle.x = -80;
+    if (particle.y < -80) particle.y = canvas.height + 80;
+    if (particle.y > canvas.height + 80) particle.y = -80;
+
+    const color =
+      index % 3 === 0
+        ? colors.pink
+        : index % 3 === 1
+          ? colors.purple
+          : colors.mint;
+
+    drawBtsLogo(particle.x, particle.y, particle.size, color, particle.rotation);
+  });
+}
 
 function drawParticles() {
   if (!canvas || !ctx) return;
 
   const colors = getThemeColors();
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  sparkles.forEach((s, i) => {
-    const theme = html.getAttribute("data-theme");
-
-    if (theme === "golden") s.life -= 0.018;
-    else if (theme === "jack-box" || theme === "jack-hope") s.life -= 0.035;
-    else if (theme === "mots" || theme === "mots7") s.life -= 0.02;
-    else s.life -= 0.025;
-
-    s.x += s.speedX;
-    s.y += s.speedY;
-
-    const color =
-      i % 3 === 0 ? colors.pink : i % 3 === 1 ? colors.purple : colors.mint;
-
-    drawSparkle(s, color);
-  });
-
-  sparkles = sparkles.filter((s) => s.life > 0);
-
-  particles.forEach((p, i) => {
-    const speed = body.classList.contains("music-mode") ? 2 : 1;
-
-    p.x += p.speedX * speed;
-    p.y += p.speedY * speed;
-    p.rotation += p.spin * speed;
-
-    reactToMouse(p);
-
-    if (p.x < -80) p.x = canvas.width + 80;
-    if (p.x > canvas.width + 80) p.x = -80;
-    if (p.y < -80) p.y = canvas.height + 80;
-    if (p.y > canvas.height + 80) p.y = -80;
-
-    const color =
-      i % 3 === 0 ? colors.pink : i % 3 === 1 ? colors.purple : colors.mint;
-
-    drawBtsLogo(p.x, p.y, p.size, color, p.rotation);
-  });
+  updateSparkles(colors);
+  updateParticles(colors);
 
   requestAnimationFrame(drawParticles);
 }

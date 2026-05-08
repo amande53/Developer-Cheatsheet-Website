@@ -580,7 +580,6 @@ body.era-mode #era-mode {
 ========================= */
 
 .hero {
-  display: none;
   max-width: 900px;
   margin: 0 auto;
   padding: 80px 24px;
@@ -1496,6 +1495,3 @@ body.music-mode .bora-title {
   }
 }
 
-.section era-section {
-  display:hidden;
-}
